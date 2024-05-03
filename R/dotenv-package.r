@@ -83,17 +83,46 @@ NULL
 #' # Clean up
 #' unlink(tmp)
 
-load_dot_env <- function(file = ".env") {
-
-  if (!file.exists(file)) stop("dot-env file does not exist", call. = TRUE)
-
+load_dot_env <- function(file = ".env", recursive = FALSE) {
+  # Normalize the path to handle relative paths and potential path issues uniformly
+  original_path <- normalizePath(file, mustWork = FALSE)
+  
+  if (!file.exists(original_path)) {
+    if (recursive) {
+      # If the file is not found and recursive is TRUE, search in parent directories
+      path <- dirname(original_path)
+      found_file <- NA  # Used to store the path of the found .env file
+      
+      # Loop until the file is found or we cannot go further up in the directory tree
+      while (is.na(found_file) && !identical(path, normalizePath(dirname(path)))) {
+        test_path <- file.path(path, basename(original_path))
+        if (file.exists(test_path)) {
+          found_file <- test_path  # Update with the path of the found file
+          break  # Stop searching once the file is found
+        }
+        path <- dirname(path)  # Move to the next parent directory
+      }
+      
+      # Handle the case where no .env file was found in any parent directory
+      if (is.na(found_file)) {
+        stop("No .env file exists in the current or any parent directory", call. = TRUE)
+      } else {
+        file <- found_file  # Set file to the found file path
+      }
+    } else {
+      # If recursive is FALSE and the file is not found, stop with an error
+      stop(".env file does not exist in the specified path", call. = TRUE)
+    }
+  }
+  
+  # Process the .env file
   tmp <- readLines(file)
   tmp <- ignore_comments(tmp)
   tmp <- ignore_empty_lines(tmp)
-
+  
   # If there's no env vars, return nothing
-  if (length(tmp) == 0) return(invisible())
-
+  if (length(tmp) == 0) return(invisible())  
+  
   tmp <- lapply(tmp, parse_dot_line)
   set_env(tmp)
 }
