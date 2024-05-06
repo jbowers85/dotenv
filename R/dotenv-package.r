@@ -137,7 +137,7 @@ load_dot_env <- function(file = ".env", recursive = FALSE) {
   tmp <- ignore_comments(tmp)
   tmp <- ignore_empty_lines(tmp)
   
-  # If no environment variables are found, return invisibly
+  # If there's no env vars, return nothing
   if (length(tmp) == 0) return(invisible())
   
   # Parse and set environment variables from the .env file
