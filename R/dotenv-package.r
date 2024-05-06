@@ -84,45 +84,63 @@ NULL
 #' unlink(tmp)
 
 load_dot_env <- function(file = ".env", recursive = FALSE) {
-  # Normalize the path to handle relative paths and potential path issues uniformly
+  # Normalize the initial file path for consistent path handling
   original_path <- normalizePath(file, mustWork = FALSE)
+  
+  # Initialize the visited directories tracker and the found file path
+  visited <- character(0)
+  found_file <- character(0)
   
   if (!file.exists(original_path)) {
     if (recursive) {
-      # If the file is not found and recursive is TRUE, search in parent directories
+      # Start with the directory containing the original path
       path <- dirname(original_path)
-      found_file <- NA  # Used to store the path of the found .env file
       
-      # Loop until the file is found or we cannot go further up in the directory tree
-      while (is.na(found_file) && !identical(path, normalizePath(dirname(path)))) {
-        test_path <- file.path(path, basename(original_path))
+      # Loop until we find the file or reach the root directory
+      while (!identical(path, normalizePath(dirname(path)))) {
+        # Normalize the current directory path for accurate detection
+        normalized_path <- normalizePath(path, mustWork = FALSE)
+        
+        # Break the loop if a cycle is detected
+        if (normalized_path %in% visited) break
+        
+        # Track the visited directory to prevent cycles
+        visited <- c(visited, normalized_path)
+        
+        # Construct the expected .env file path for the current directory
+        test_path <- file.path(normalized_path, basename(original_path))
+        
+        # If the .env file is found, update `found_file` and exit the loop
         if (file.exists(test_path)) {
-          found_file <- test_path  # Update with the path of the found file
-          break  # Stop searching once the file is found
+          found_file <- test_path
+          break
         }
-        path <- dirname(path)  # Move to the next parent directory
+        
+        # Move up one directory level
+        path <- dirname(normalized_path)
       }
       
-      # Handle the case where no .env file was found in any parent directory
-      if (is.na(found_file)) {
-        stop("No .env file exists in the current or any parent directory", call. = TRUE)
+      # If no file was found in the entire search, raise an error
+      if (length(found_file) == 0) {
+        stop(sprintf("No .env file found from '%s' up to the root directory", original_path), call. = TRUE)
       } else {
-        file <- found_file  # Set file to the found file path
+        file <- found_file
       }
     } else {
-      # If recursive is FALSE and the file is not found, stop with an error
-      stop(".env file does not exist in the specified path", call. = TRUE)
+      # Raise an error if recursive is FALSE and the .env file does not exist in the specified location
+      stop(sprintf(".env file does not exist in the specified path: '%s'", original_path), call. = TRUE)
     }
   }
   
-  # Process the .env file
+  # Read and process the .env file
   tmp <- readLines(file)
   tmp <- ignore_comments(tmp)
   tmp <- ignore_empty_lines(tmp)
   
-  # If there's no env vars, return nothing
-  if (length(tmp) == 0) return(invisible())  
+  # If no environment variables are found, return invisibly
+  if (length(tmp) == 0) return(invisible())
   
+  # Parse and set environment variables from the .env file
   tmp <- lapply(tmp, parse_dot_line)
   set_env(tmp)
 }
